@@ -29,6 +29,7 @@ import java.util.List;
 public class EkycController {
     private static final Logger logger = LoggerFactory.getLogger(EkycController.class);
     public static final DateFormat showDf = new SimpleDateFormat("dd/MM/yyyy");
+    public static final DateFormat mrzDf = new SimpleDateFormat("yyMMdd");
     @Autowired
     GoogleVisionService googleVisionService;
     @Autowired
@@ -61,13 +62,12 @@ public class EkycController {
         List<String> ids = Utils.extractCCCD(frontResponse.getFullTextAnnotation().getText());
         List<String> names = Utils.extractUppercaseStrings(frontResponse.getFullTextAnnotation().getText());
         List<String> dateList = Utils.extractDates(frontResponse.getFullTextAnnotation().getText());
+        logger.info("ids:" + ids);
+        logger.info("names:" + names);
+        logger.info("dateList:" + dateList);
         PersonInfomation personInfomation = new PersonInfomation();
         if (ids.size() > 0){
             personInfomation.setId(ids.get(0));
-        }
-
-        if (names.size() > 4){
-            personInfomation.setName(names.get(3));
         }
         if (dateList.size() > 0){
             if (dateList.size() == 2){
@@ -85,13 +85,65 @@ public class EkycController {
                 }catch (Exception e){
 
                 }
+            }else{
+                try {
+                    Date date1 = showDf.parse(dateList.get(0));
+                    if (date1.getTime() < Calendar.getInstance().getTime().getTime()){
+                        personInfomation.setDob(dateList.get(0));
+                    }else{
+                        personInfomation.setExpiredDate(dateList.get(0));
+                    }
+                }catch (Exception e){
 
+                }
             }
         }
-        logger.info("ids:" + ids);
-        logger.info("names:" + names);
-        logger.info("dateList:" + dateList);
 
+        AnnotateImageResponse backResponse = googleVisionService.processImageByVision(backFileName);
+        logger.info("text:" + backResponse.getFullTextAnnotation().getText());
+        List<String> mrzIds = Utils.extractMRZIdCCCD(backResponse.getFullTextAnnotation().getText());
+        List<String> mrzDate = Utils.extractMRZDateCCCD(backResponse.getFullTextAnnotation().getText());
+        List<String> mrzName = Utils.extractMRZName(backResponse.getFullTextAnnotation().getText());
+        List<String> backDateList = Utils.extractDates(backResponse.getFullTextAnnotation().getText());
+        logger.info("mrzIds:" + mrzIds);
+        logger.info("mrzDate:" + mrzDate);
+        logger.info("mrzName:" + mrzName);
+        logger.info("backDateList:" + backDateList);
+        if (mrzIds.size() > 0){
+            personInfomation.setId(mrzIds.get(0).substring(15));
+        }
+        if (mrzDate.size() > 0){
+            String mrzStr = mrzDate.get(0);
+            String mrzDob = mrzStr.substring(0,6);
+            String mrzGender = mrzStr.substring(7,8);
+            String mrzExpired = mrzStr.substring(8,14);
+            try {
+                personInfomation.setDob(showDf.format(mrzDf.parse(mrzDob)));
+                personInfomation.setExpiredDate(showDf.format(mrzDf.parse(mrzExpired)));
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+            if (mrzGender.equals("F")){
+                personInfomation.setGender("Nữ");
+            }else if (mrzGender.equals("M")){
+                personInfomation.setGender("Nam");
+            }
+        }
+        if (mrzName.size() > 0){
+            String mrzStr = mrzName.get(0);
+            String nameAscii = mrzStr.replaceAll("<<", " ").replaceAll("<"," ").trim();
+            for (String name : names){
+                if (nameAscii.contains(Utils.convertToAscii(name).trim())){
+                    personInfomation.setName(name);
+                }
+            }
+            if (personInfomation.getName() == null){
+                personInfomation.setName(nameAscii);
+            }
+        }
+        if (backDateList.size() > 0){
+            personInfomation.setIssuedDate(backDateList.get(0));
+        }
         //Check QR code existence
         for (LocalizedObjectAnnotation annotation : frontResponse.getLocalizedObjectAnnotationsList()) {
             logger.info("Object: " + annotation.getName());

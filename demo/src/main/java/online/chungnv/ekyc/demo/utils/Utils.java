@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.DateFormat;
+import java.text.Normalizer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -112,9 +113,35 @@ public class Utils {
         return null;
     }
     public static void main(String[] args) throws Exception{
-        BufferedImage in = ImageIO.read(new File("qrcode.jpg"));
-        logger.info(readQRCode(in));
+//        BufferedImage in = ImageIO.read(new File("qrcode.jpg"));
+//        logger.info(readQRCode(in));
+        String name = "NGÔ THỊ LỆ THUỶ";
+String mrz = "IDVNM1910086005034191008600<<8\n" +
+        "9106204F3106202VNM<<<<<<<<<<2\n" +
+        "NGO<THI<LE<THUY<<<<<<<<<<<<<<<";
 
+        List<String> mrzDate = extractMRZDateCCCD(mrz);
+        System.out.println(mrzDate);
+        System.out.println(extractMRZIdCCCD(mrz));
+        List<String> mrzName = extractMRZName(mrz);
+        System.out.println(mrzName);
+        if (mrzDate.size() > 0){
+            String mrzStr = mrzDate.get(0);
+            String mrzDob = mrzStr.substring(0,6);
+            String mrzGender = mrzStr.substring(7,8);
+            String mrzExpired = mrzStr.substring(8,14);
+            System.out.println(mrzDob);
+            System.out.println(mrzGender);
+            System.out.println(mrzExpired);
+        }
+
+        if (mrzName.size() > 0){
+            String mrzStr = mrzName.get(0);
+            String nameASCII = mrzStr.replaceAll("<<", " ").replaceAll("<"," ").trim();
+            if (convertToAscii(name).trim().equals(nameASCII)){
+                System.out.printf(name);
+            }
+        }
     }
 
     public static PersonInfomation parseIdQRCode(String qrCode){
@@ -185,11 +212,65 @@ public class Utils {
         return uppercaseStrings;
     }
 
+    public static List<String> extractMRZDateCCCD(String input) {
+        List<String> response = new ArrayList<>();
+
+        String regex = "\\d{7}(M|F)\\d{7}VNM";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(input);
+
+        while (matcher.find()) {
+
+            String str = matcher.group();
+            response.add(str);
+        }
+
+        return response;
+    }
+public static List<String> extractMRZIdCCCD(String input) {
+        List<String> response = new ArrayList<>();
+
+        String regex = "IDVNM\\d{22}";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(input);
+
+        while (matcher.find()) {
+
+            String str = matcher.group();
+            response.add(str);
+        }
+
+        return response;
+    }
+
+
+    public static List<String> extractMRZName(String input) {
+        List<String> response = new ArrayList<>();
+        String regex = "\\b[A-Z]+<{1,2}[A-Z<]+<<";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(input);
+
+        while (matcher.find()) {
+            String str = matcher.group();
+            response.add(str);
+        }
+
+        return response;
+    }
+
+
     public static int countWords(String input) {
         String[] words = input.split("\\s+");
         return words.length;
     }
 
+    public static String convertToAscii(String vietnameseText) {
+        String normalizedText = Normalizer.normalize(vietnameseText, Normalizer.Form.NFD);
+        String asciiText = normalizedText.replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .replaceAll("đ", "d").replaceAll("Đ", "D");
+
+        return asciiText;
+    }
 
     public static double calculateStringSimilarity(String string1, String string2) {
         int distance = calculateLevenshteinDistance(string1, string2);
